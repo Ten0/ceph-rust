@@ -1333,6 +1333,27 @@ impl IoCtx {
         .await
     }
 
+    /// Async variant of rados_commit_write_operations
+    pub async fn rados_async_commit_write_operations(
+        &self,
+        mut write_op: WriteOperation<'_>,
+    ) -> RadosResult<u32> {
+        self.ioctx_guard()?;
+        let object_name_str = CString::new(write_op.object_name)?;
+
+        with_completion(self, |c| unsafe {
+            rados_aio_write_op_operate(
+                write_op.write_op_handle,
+                self.ioctx,
+                c,
+                object_name_str.as_ptr(),
+                &mut write_op.mtime,
+                write_op.flags as i32,
+            )
+        })?
+        .await
+    }
+
     /// Efficiently copy a portion of one object to another
     /// If the underlying filesystem on the OSD supports it, this will be a
     /// copy-on-write clone.
