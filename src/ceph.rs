@@ -51,7 +51,6 @@ use {
     crate::{list_stream::ListStream, read_stream::ReadStream},
     std::{
         pin::Pin,
-        sync::Arc,
         task::{Context, Poll},
     },
     uuid::Uuid,
