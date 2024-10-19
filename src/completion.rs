@@ -148,7 +148,6 @@ where
         // On error dispatching I/O, drop the unused rados_completion_t
         unsafe {
             rados_aio_release(completion);
-            drop(completion)
         }
         Err(ret_code.into())
     } else {
