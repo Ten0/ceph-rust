@@ -46,7 +46,6 @@ use crate::list_stream::ListStream;
 use crate::read_stream::ReadStream;
 pub use crate::write_sink::WriteSink;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::{Context, Poll};
 use uuid::Uuid;
 
