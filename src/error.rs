@@ -25,6 +25,8 @@ use uuid::Error as UuidError;
 
 extern crate nix;
 
+pub use nix::errno::Errno;
+
 /// Custom error handling for the library
 #[derive(Debug)]
 pub enum RadosError {
@@ -32,7 +34,7 @@ pub enum RadosError {
     NulError(NulError),
     Error(String),
     IoError(Error),
-    ApiError(nix::errno::Errno),
+    ApiError(Errno),
     IntoStringError(IntoStringError),
     ParseIntError(ParseIntError),
     ParseBoolError(ParseBoolError),
@@ -50,7 +52,7 @@ impl fmt::Display for RadosError {
         match *self {
             RadosError::FromUtf8Error(ref e) => f.write_str(&e.to_string()),
             RadosError::NulError(ref e) => f.write_str(&e.to_string()),
-            RadosError::Error(ref e) => f.write_str(&e),
+            RadosError::Error(ref e) => f.write_str(e),
             RadosError::IoError(ref e) => f.write_str(&e.to_string()),
             RadosError::ApiError(ref e) => e.fmt(f),
             RadosError::IntoStringError(ref e) => f.write_str(&e.to_string()),
@@ -139,6 +141,6 @@ impl From<Error> for RadosError {
 }
 impl From<i32> for RadosError {
     fn from(err: i32) -> RadosError {
-        RadosError::ApiError(nix::errno::Errno::from_i32(-err))
+        RadosError::ApiError(Errno::from_raw(-err))
     }
 }

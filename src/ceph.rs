@@ -32,6 +32,7 @@ use crate::rados_striper::*;
 use crate::status::*;
 use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
+use std::sync::Arc;
 use std::{ptr, str};
 
 use crate::utils::*;
@@ -333,6 +334,7 @@ impl Iterator for XAttr {
 /// Owns a ioctx handle
 pub struct IoCtx {
     ioctx: rados_ioctx_t,
+    _rados: Arc<Rados>,
 }
 
 unsafe impl Send for IoCtx {}
@@ -393,6 +395,13 @@ pub fn connect_to_ceph(user_id: &str, config_file: &str) -> RadosResult<Rados> {
         if ret_code < 0 {
             return Err(ret_code.into());
         }
+        // Instantiate Rados struct to call shutdown on drop.
+        // Doc specifies that it's not necessary to call rados_shutdown if
+        // rados_connect hasn't run, but that seems incorrect.
+        let rados = Rados {
+            rados: cluster_handle,
+            phantom: PhantomData,
+        };
         let ret_code = rados_conf_read_file(cluster_handle, conf_file.as_ptr());
         if ret_code < 0 {
             return Err(ret_code.into());
@@ -402,11 +411,8 @@ pub fn connect_to_ceph(user_id: &str, config_file: &str) -> RadosResult<Rados> {
             return Err(ret_code.into());
         }
         // Tracing integration needs to be enabled after we connected for some reason
-        crate::tracing_integration::enable_tracing_integration(cluster_handle)?;
-        Ok(Rados {
-            rados: cluster_handle,
-            phantom: PhantomData,
-        })
+        crate::tracing_integration::enable_tracing_integration(rados.rados)?;
+        Ok(rados)
     }
 }
 
@@ -482,7 +488,7 @@ impl Rados {
     /// Create an io context. The io context allows you to perform operations
     /// within a particular pool.
     /// For more details see rados_ioctx_t.
-    pub fn get_rados_ioctx(&self, pool_name: &str) -> RadosResult<IoCtx> {
+    pub fn get_rados_ioctx(self: &Arc<Self>, pool_name: &str) -> RadosResult<IoCtx> {
         self.conn_guard()?;
         let pool_name_str = CString::new(pool_name)?;
         unsafe {
@@ -491,14 +497,17 @@ impl Rados {
             if ret_code < 0 {
                 return Err(ret_code.into());
             }
-            Ok(IoCtx { ioctx })
+            Ok(IoCtx {
+                ioctx,
+                _rados: self.clone(),
+            })
         }
     }
 
     /// Create an io context. The io context allows you to perform operations
     /// within a particular pool.
     /// For more details see rados_ioctx_t.
-    pub fn get_rados_ioctx2(&self, pool_id: i64) -> RadosResult<IoCtx> {
+    pub fn get_rados_ioctx2(self: &Arc<Self>, pool_id: i64) -> RadosResult<IoCtx> {
         self.conn_guard()?;
         unsafe {
             let mut ioctx: rados_ioctx_t = ptr::null_mut();
@@ -506,7 +515,10 @@ impl Rados {
             if ret_code < 0 {
                 return Err(ret_code.into());
             }
-            Ok(IoCtx { ioctx })
+            Ok(IoCtx {
+                ioctx,
+                _rados: self.clone(),
+            })
         }
     }
 }
@@ -856,7 +868,6 @@ impl IoCtx {
                 out_str.as_ptr() as *mut c_char,
                 out_buff_size as c_int,
             );
-            if ret_code == -ERANGE {}
             if ret_code < 0 {
                 return Err(ret_code.into());
             }
@@ -2020,7 +2031,7 @@ impl Rados {
             debug!("return code: {}", ret_code);
             if ret_code < 0 {
                 if outs_len > 0 && !outs.is_null() {
-                    let slice = ::std::slice::from_raw_parts(outs as *const u8, outs_len as usize);
+                    let slice = ::std::slice::from_raw_parts(outs as *const u8, outs_len);
                     rados_buffer_free(outs);
                     return Err(RadosError::new(String::from_utf8_lossy(slice).into_owned()));
                 }
@@ -2090,7 +2101,7 @@ impl Rados {
                 cmds.as_mut_ptr(),
                 1,
                 data.as_ptr() as *mut c_char,
-                data.len() as usize,
+                data.len(),
                 &mut outbuf,
                 &mut outbuf_len,
                 &mut outs,
@@ -2180,7 +2191,7 @@ impl Rados {
                 cmds.as_mut_ptr(),
                 1,
                 data.as_ptr() as *mut c_char,
-                data.len() as usize,
+                data.len(),
                 &mut outbuf,
                 &mut outbuf_len,
                 &mut outs,
@@ -2271,7 +2282,7 @@ impl Rados {
                 cmds.as_mut_ptr(),
                 1,
                 data.as_ptr() as *mut c_char,
-                data.len() as usize,
+                data.len(),
                 &mut outbuf,
                 &mut outbuf_len,
                 &mut outs,
