@@ -1,9 +1,13 @@
-use crate::{error::RadosResult, rados::*};
+use crate::error::RadosResult;
+use crate::rados::*;
 
-use {libc::*, std::ffi::CStr, tracing::Level};
+use libc::*;
+use std::ffi::CStr;
+use tracing::Level;
 
 /// For tracing integration to function properly, logging (tracing handler) must be enabled before
-/// the `Rados` struct is created.
+/// connecting to ceph: if tracing is not enabled, we don't set a callback, which avoids the
+/// corresponding overhead.
 pub(crate) fn enable_tracing_integration(rados: rados_t) -> RadosResult<()> {
     let (level_str, opt_log_callback): (&[u8], rados_log_callback_t) = {
         if event_enabled!(target: "librados", Level::ERROR) {
