@@ -58,7 +58,7 @@ extern "C" fn log_callback(
 ) {
     macro_rules! level {
         ($($l: expr => $n: ident,)*) => {
-            match unsafe { *(level as *const u8) } {
+            match unsafe { *((level as *const u8).add(1)) } {
                 $(
                     $l => {
                         if event_enabled!(target: "librados", Level::$n) {
@@ -68,15 +68,20 @@ extern "C" fn log_callback(
                         }
                     }
                 )*
-                _ => return,
+                _ => {
+                    let s = unsafe { CStr::from_ptr(level) };
+                    let level = s.to_string_lossy();
+                    event!(target: "librados", Level::WARN, "Unknown log level: {level} - please report issue at github.com/ceph/ceph-rust");
+                    Level::DEBUG
+                },
             }
         };
     }
     let level = level!(
-        b'e' => ERROR,
-        b'w' => WARN,
-        b'i' => INFO,
-        b'd' => DEBUG,
+        b'E' => ERROR,
+        b'W' => WARN,
+        b'I' => INFO,
+        b'D' => DEBUG,
     );
 
     // We need to log, build the things
